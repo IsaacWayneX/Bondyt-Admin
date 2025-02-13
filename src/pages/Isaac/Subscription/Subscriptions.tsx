@@ -1,10 +1,10 @@
-"use client"
-
 import { useState, useRef, useEffect } from "react"
 import { Plus, Bell, X, ChevronLeft, Trash2 } from "lucide-react"
 import SubscriptionUsers from "./subscription-users"
 import Slider from "@mui/material/Slider"
 import { styled } from "@mui/material/styles"
+import apiClient from "../utils/apiClient"
+import LoadingModal from "../LoadingModal"
 
 const PurpleSlider = styled(Slider)({
   color: "#6C27FF",
@@ -52,24 +52,29 @@ interface Plan {
   duration: number
 }
 
-const initialPlans: Plan[] = [
-  { id: 1, name: "Weekly", price: 10, duration: 7 },
-  { id: 2, name: "Monthly", price: 30, duration: 30 },
-  { id: 3, name: "Yearly", price: 300, duration: 365 },
-]
+// const initialPlans: Plan[] = [
+//   { id: 1, name: "Weekly", price: 10, duration: 7 },
+//   { id: 2, name: "Monthly", price: 30, duration: 30 },
+//   { id: 3, name: "Yearly", price: 300, duration: 365 },
+// ]
 
 export default function Subscriptions() {
-  const [plans, setPlans] = useState<Plan[]>(initialPlans)
+  const [plans, setPlans] = useState<Plan[]>([])
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isViewUsersOpen, setIsViewUsersOpen] = useState(false)
   const [deletePopoverPlan, setDeletePopoverPlan] = useState<Plan | null>(null)
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
-  const [newPlan, setNewPlan] = useState({ name: "", price: "", duration: 7 })
+  const [newPlan, setNewPlan] = useState({ name: "", price: "", duration: 1 })
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null)
   const [editPrice, setEditPrice] = useState("")
-  const [editDuration, setEditDuration] = useState(7)
+  const [editDuration, setEditDuration] = useState(1)
+  const [isLoading, setIsLoading] = useState(false)
   const deletePopoverRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    fetchPlans()
+  }, [])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -84,17 +89,45 @@ export default function Subscriptions() {
     }
   }, [])
 
-  const handleSave = () => {
-    if (newPlan.name && newPlan.price) {
-      const newPlanObj = {
-        id: plans.length + 1,
-        name: newPlan.name,
-        price: Number.parseFloat(newPlan.price),
-        duration: newPlan.duration,
+  const fetchPlans = async () => {
+    setIsLoading(true)
+    try {
+      const response = await apiClient.get("/admin/subscription/all")
+      if (response.data && Array.isArray(response.data)) {
+        const formattedPlans = response.data.map((plan: any) => ({
+          id: plan.id,
+          name: plan.name,
+          price: plan.amount / 100, // Assuming the amount is in cents
+          duration: plan.duration,
+        }))
+        setPlans(formattedPlans)
       }
-      setPlans([...plans, newPlanObj])
-      setNewPlan({ name: "", price: "", duration: 7 })
-      setIsAddModalOpen(false)
+    } catch (error) {
+      console.error("Error fetching plans:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    if (newPlan.name && newPlan.price) {
+      setIsLoading(true)
+      try {
+        const response = await apiClient.post("/admin/subscription/create", {
+          name: newPlan.name,
+          amount: Math.round(Number(newPlan.price) * 100),
+          duration: newPlan.duration,
+        })
+        if (response.data && response.data.statusCode === 200) {
+          await fetchPlans()
+          setNewPlan({ name: "", price: "", duration: 1 })
+          setIsAddModalOpen(false)
+        }
+      } catch (error) {
+        console.error("Error creating plan:", error)
+      } finally {
+        setIsLoading(false)
+      }
     }
   }
 
@@ -109,21 +142,42 @@ export default function Subscriptions() {
     setDeletePopoverPlan(plan)
   }
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deletePopoverPlan) {
-      setPlans(plans.filter((plan) => plan.id !== deletePopoverPlan.id))
-      setDeletePopoverPlan(null)
+      setIsLoading(true)
+      try {
+        const response = await apiClient.delete(`/admin/subscription/delete/${deletePopoverPlan.id}`)
+        if (response.data && response.data.statusCode === 200) {
+          await fetchPlans()
+          setDeletePopoverPlan(null)
+        }
+      } catch (error) {
+        console.error("Error deleting plan:", error)
+      } finally {
+        setIsLoading(false)
+      }
     }
   }
 
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (editingPlan && editPrice) {
-      const updatedPlans = plans.map((plan) =>
-        plan.id === editingPlan.id ? { ...plan, price: Number.parseFloat(editPrice), duration: editDuration } : plan,
-      )
-      setPlans(updatedPlans)
-      setIsEditModalOpen(false)
-      setEditingPlan(null)
+      setIsLoading(true)
+      try {
+        const response = await apiClient.patch("/admin/subscription/update", {
+          plan_id: editingPlan.id,
+          amount: Math.round(Number(editPrice) * 100),
+          duration: editDuration,
+        })
+        if (response.data && response.data.statusCode === 200) {
+          await fetchPlans()
+          setIsEditModalOpen(false)
+          setEditingPlan(null)
+        }
+      } catch (error) {
+        console.error("Error updating plan:", error)
+      } finally {
+        setIsLoading(false)
+      }
     }
   }
 
@@ -186,7 +240,7 @@ export default function Subscriptions() {
                   <PurpleSlider
                     value={newPlan.duration}
                     onChange={(_, value) => setNewPlan({ ...newPlan, duration: value as number })}
-                    min={7}
+                    min={1}
                     max={180}
                     step={1}
                     valueLabelDisplay="auto"
@@ -239,7 +293,7 @@ export default function Subscriptions() {
                   <PurpleSlider
                     value={editDuration}
                     onChange={(_, value) => setEditDuration(value as number)}
-                    min={7}
+                    min={1}
                     max={180}
                     step={1}
                     valueLabelDisplay="auto"
@@ -327,6 +381,7 @@ export default function Subscriptions() {
           ))}
         </div>
       </div>
+      {isLoading && <LoadingModal />}
     </div>
   )
 }

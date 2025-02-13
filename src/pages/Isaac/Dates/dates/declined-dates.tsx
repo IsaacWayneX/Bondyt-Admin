@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Search, ChevronLeft } from 'lucide-react'
+"use client"
+
+import { useState, useEffect } from "react"
+import { Search, ChevronLeft, HourglassIcon } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import apiClient from "../../utils/apiClient"
 import LoadingModal from "../../LoadingModal"
@@ -51,12 +53,12 @@ export default function DeclinedDates() {
   useEffect(() => {
     const fetchDeclinedDates = async () => {
       try {
-        const response = await apiClient.get('admin/date/declined')
+        const response = await apiClient.get("admin/date/declined")
         console.log("API Response:", response.data)
         setDeclinedDates(Array.isArray(response.data) ? response.data : [])
       } catch (err) {
         console.error("Error fetching declined dates:", err)
-        setError('An error occurred while fetching declined dates')
+        setError("An error occurred while fetching declined dates")
       } finally {
         setIsLoading(false)
       }
@@ -104,24 +106,32 @@ export default function DeclinedDates() {
             <h2 className="text-xl font-bold text-gray-900">Declined dates</h2>
           </div>
 
-          <div className="divide-y">
-            <div className="grid grid-cols-[2fr,1fr,1fr] px-6 py-4 border-b bg-gray-50">
-              <div className="text-sm font-bold text-gray-900">Users</div>
-              <div className="text-sm font-bold text-gray-900">Location</div>
-              <div className="text-sm font-bold text-gray-900">Action</div>
-            </div>
-
-            {isLoading ? (
-              // Loading state
-              Array.from({ length: 5 }).map((_, index) => (
-                <LoadingSkeleton key={index} />
-              ))
-            ) : error ? (
-              <div className="p-6 text-center text-red-500 text-lg font-semibold">
-                Error: {error}
+          {isLoading ? (
+            <div className="divide-y">
+              <div className="grid grid-cols-[2fr,1fr,1fr] px-6 py-4 border-b bg-gray-50">
+                <div className="text-sm font-bold text-gray-900">Users</div>
+                <div className="text-sm font-bold text-gray-900">Location</div>
+                <div className="text-sm font-bold text-gray-900">Action</div>
               </div>
-            ) : declinedDates.length > 0 ? (
-              declinedDates.map((date) => (
+              {Array.from({ length: 5 }).map((_, index) => (
+                <LoadingSkeleton key={index} />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="p-6 text-center text-red-500 text-lg font-semibold">Error: {error}</div>
+          ) : declinedDates.length === 0 ? (
+            <div className="p-20 flex flex-col items-center justify-center">
+              <HourglassIcon className="h-24 w-24 text-[#5E17EB] opacity-50 mb-4" />
+              <p className="text-2xl font-semibold text-gray-600">No declined dates</p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              <div className="grid grid-cols-[2fr,1fr,1fr] px-6 py-4 border-b bg-gray-50">
+                <div className="text-sm font-bold text-gray-900">Users</div>
+                <div className="text-sm font-bold text-gray-900">Location</div>
+                <div className="text-sm font-bold text-gray-900">Action</div>
+              </div>
+              {declinedDates.map((date) => (
                 <div key={date.id} className="grid grid-cols-[2fr,1fr,1fr] px-6 py-4 items-center">
                   <div className="flex items-center gap-4">
                     <div className="flex -space-x-2">
@@ -153,15 +163,12 @@ export default function DeclinedDates() {
                     </span>
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="p-6 text-center text-gray-500 text-lg font-semibold">
-                No declined dates found.
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </>
   )
 }
+

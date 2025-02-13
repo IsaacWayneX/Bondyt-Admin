@@ -1,3 +1,5 @@
+"use client"
+
 import { useState, useEffect, type FormEvent } from "react"
 import { Trash2, X, MapPin, Upload } from "lucide-react"
 import TicketsModal from "./TicketsModal"
@@ -265,8 +267,8 @@ export default function Events() {
 
       {/* Action Modal */}
       {showActionModal && selectedEvent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Event Actions</h3>
               <button onClick={() => setShowActionModal(false)}>
@@ -296,8 +298,8 @@ export default function Events() {
 
       {/* Event Details Modal */}
       {showEventModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900">{editingEvent ? "Edit Event" : "Add New Event"}</h3>
               <button
@@ -385,8 +387,8 @@ export default function Events() {
 
       {/* Banner Upload Modal */}
       {showBannerModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Upload Banner</h3>
               <button onClick={() => setShowBannerModal(false)}>

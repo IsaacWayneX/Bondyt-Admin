@@ -131,7 +131,7 @@ export default function PendingOrders() {
                     ${Number.parseFloat(order.product.price).toLocaleString()}
                   </div>
                   <div className="inline-flex px-2 py-1 rounded-md text-xs bg-purple-100 text-purple-600 whitespace-nowrap">
-                    {order.order.payment_status}
+                    {order.order.payment_status ?? "Unknown" }
                   </div>
                 </div>
               </div>

@@ -1,45 +1,30 @@
+"use client"
+
 import { useState, useEffect, useCallback } from "react"
-import { Search, Bell, Settings } from "lucide-react"
+import { Search, Bell, Settings, HourglassIcon } from "lucide-react"
 import { Link } from "react-router-dom"
 import DatesHeader from "./dates-header"
 import LoadingModal from "../LoadingModal"
 import apiClient from "../utils/apiClient"
 import "../border.css"
 
-// Updated interfaces based on the actual API response
-interface UserProfile {
-  id: string
-  first_name: string
-  profilePhoto: {
-    url: string
-  }
-}
-
-interface PlaceReservation {
-  id: string
-  place: {
-    id: string
-    location: {
-      city: string
-      country: string
-      state: string
+interface Booking {
+  id: number
+  pick_up_location: string
+  booked_by: {
+    first_name: string
+    profilePhoto: {
+      url: string | null
     }
   }
-}
-
-interface Booking {
-  id: string
-  booked_by: UserProfile
-  matched_user: UserProfile
-  pick_up_location: string
-  security_booking_id: string | null
-  car_booking_id: string | null
-  scheduled_date: string
-  scheduled_time: string
-  status: string
-  total_amount: string
-  currency: string
-  place_reservation: PlaceReservation
+  matched_user: {
+    first_name: string
+    profilePhoto: {
+      url: string | null
+    }
+  }
+  security_booking_id: number | null
+  car_booking_id: number | null
 }
 
 export default function Dates() {
@@ -108,7 +93,10 @@ export default function Dates() {
           ) : isLoading ? (
             <div className="p-6 text-center">Loading...</div>
           ) : bookings.length === 0 ? (
-            <div className="p-6 text-center">No pending dates found.</div>
+            <div className="p-20 flex flex-col items-center justify-center">
+              <HourglassIcon className="h-24 w-24 text-[#5E17EB] opacity-50 mb-4" />
+              <p className="text-2xl font-semibold text-gray-600">No pending dates</p>
+            </div>
           ) : (
             <div className="divide-y">
               {bookings.map((booking) => (
@@ -159,15 +147,6 @@ export default function Dates() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end">
-                    {/* <p className="text-sm text-gray-600 mb-2">
-                      {new Date(booking.scheduled_date).toLocaleDateString()} at {booking.scheduled_time}
-                    </p>
-                    <p className="text-sm font-semibold text-gray-800 mb-2">
-                      {Number.parseFloat(booking.total_amount).toLocaleString(undefined, {
-                        style: "currency",
-                        currency: booking.currency,
-                      })}
-                    </p> */}
                     <Link
                       to={`${booking.id}`}
                       className="rounded-md bg-[#5E17EB] px-6 py-2 text-sm font-bold text-white hover:bg-[#4C11D1] transition-colors"

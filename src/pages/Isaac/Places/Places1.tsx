@@ -1,17 +1,35 @@
-import { useState, type FormEvent } from "react"
+"use client"
+
+import { useState, useEffect, type FormEvent } from "react"
 import { Trash2, X, Upload, Star, Plus, MapPin } from "lucide-react"
 import LocationSelectionModal from "../locationselection"
+import apiClient from "../utils/apiClient"
+import LoadingModal from "../LoadingModal"
 
 interface Place {
-  id: number
+  id: string
   name: string
-  location: string
-  category: string
+  location: {
+    city: string
+    state: string
+    country: string
+    latitude: number
+    longitude: number
+  }
+  category_id: string
   rating: number
-  images: string[]
-  weekdayHours: string
-  weekendHours: string
-  menuPdf?: string
+  opening_hour: string
+  closing_hour: string
+  weekend_opening_hour: string
+  weekend_closing_hour: string
+  menu_url?: string
+  about: string
+  banner?: string
+}
+
+interface Category {
+  id: string
+  name: string
 }
 
 interface SelectedLocation {
@@ -22,36 +40,9 @@ interface SelectedLocation {
   longitude: string
 }
 
-const dummyCategories = ["Restaurant", "Bar", "Club", "Cafe", "Lounge"]
-
-const dummyPlaces: Place[] = [
-  {
-    id: 1,
-    name: "Puzzzles Abuja",
-    location: "Gwarimpa, Abuja",
-    category: "Restaurant",
-    rating: 4,
-    images: [
-      "https://www.yum.com/wps/wcm/connect/yumbrands/77ac5d27-1357-4792-9953-54b11f5ae7dd/yum-com-24-product-PH.jpg?MOD=AJPERES&CACHEID=ROOTWORKSPACE.Z18_5QC4HBC039RJ406SQH4UBH3695-77ac5d27-1357-4792-9953-54b11f5ae7dd-oXSxcXb",
-    ],
-    weekdayHours: "9:00 AM - 10:00 PM",
-    weekendHours: "10:00 AM - 11:00 PM",
-  },
-  {
-    id: 2,
-    name: "Coal City Bukka",
-    location: "Gwarimpa, Abuja",
-    category: "Restaurant",
-    rating: 5,
-    images: [
-      "https://images.timbu.com/contents-11243d64aac14aaebb90558e1f19176e/5fdfaf56-462b-4f92-ae77-9580ae194e49.png",
-    ],
-    weekdayHours: "8:00 AM - 9:00 PM",
-    weekendHours: "9:00 AM - 10:00 PM",
-  },
-]
-
 export default function Places() {
+  const [places, setPlaces] = useState<Place[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [showActionModal, setShowActionModal] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
@@ -63,16 +54,46 @@ export default function Places() {
   const [rating, setRating] = useState(0)
   const [bannerFiles, setBannerFiles] = useState<File[]>([])
   const [menuFile, setMenuFile] = useState<File | null>(null)
-  const [menuPreviewUrl, setMenuPreviewUrl] = useState<string>("")
   const [isEditMode, setIsEditMode] = useState(false)
   const [formData, setFormData] = useState<FormData | null>(null)
   const [showLocationModal, setShowLocationModal] = useState(false)
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [bannerPreviews, setBannerPreviews] = useState<string[]>([])
+  const [errors, setErrors] = useState<string[]>([])
+
+  useEffect(() => {
+    fetchPlaces()
+    fetchCategories()
+  }, [])
+
+  const fetchPlaces = async () => {
+    setIsLoading(true)
+    try {
+      const response = await apiClient.get("/admin/place/all")
+      setPlaces(response.data.data)
+    } catch (error) {
+      console.error("Error fetching places:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchCategories = async () => {
+    setIsLoading(true)
+    try {
+      const response = await apiClient.get("/admin/place/all-categories")
+      setCategories(response.data.data)
+    } catch (error) {
+      console.error("Error fetching categories:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const openActionModal = (place: Place) => {
     setSelectedPlace(place)
     setShowActionModal(true)
-    selectedPlace
   }
 
   const handleAddPlace = (e: FormEvent<HTMLFormElement>) => {
@@ -85,9 +106,10 @@ export default function Places() {
 
   const handleDetailsSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setIsLoading(true)
+    setErrors([])
     const detailsData = new FormData(e.currentTarget)
 
-    // Combine all form data
     const requestData = new FormData()
     if (formData) {
       for (const [key, value] of formData.entries()) {
@@ -99,47 +121,89 @@ export default function Places() {
     }
     requestData.append("rating", rating.toString())
 
-    // Append banner files
+    if (selectedLocation) {
+      requestData.append("city", selectedLocation.city)
+      requestData.append("state", selectedLocation.state)
+      requestData.append("country", selectedLocation.country)
+      requestData.append("latitude", selectedLocation.latitude)
+      requestData.append("longitude", selectedLocation.longitude)
+    }
+
     bannerFiles.forEach((file, index) => {
       requestData.append(`banner${index + 1}`, file)
     })
 
-    // Append menu file if exists
     if (menuFile) {
-      requestData.append("menuPdf", menuFile)
+      requestData.append("menu_image", menuFile)
     }
 
-    // Here you would typically send the requestData to your API
-    console.log("Form submitted:", requestData)
-
-    setShowDetailsModal(false)
-    resetForm()
+    try {
+      if (isEditMode && selectedPlace) {
+        await apiClient.post("/admin/place/edit", requestData)
+      } else {
+        await apiClient.post("/admin/place/new", requestData)
+      }
+      fetchPlaces()
+      setShowDetailsModal(false)
+      resetForm()
+    } catch (error: any) {
+      console.error("Error saving place:", error)
+      if (error.response && error.response.data && error.response.data.message) {
+        setErrors(
+          Array.isArray(error.response.data.message) ? error.response.data.message : [error.response.data.message],
+        )
+      } else {
+        setErrors(["An unexpected error occurred. Please try again."])
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCreateCategory = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setIsLoading(true)
     const categoryData = new FormData(e.currentTarget)
 
-    // Here you would typically send category data to your API
-    console.log("New category:", categoryData.get("category"))
+    try {
+      await apiClient.post("/admin/place/new-category", {
+        name: categoryData.get("category"),
+      })
+      fetchCategories()
+      setShowCategoryModal({ show: false, parent: null })
+    } catch (error) {
+      console.error("Error creating category:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-    setShowCategoryModal({ show: false, parent: null })
+  const handleDeletePlace = async (id: string) => {
+    setIsLoading(true)
+    try {
+      await apiClient.delete(`/admin/place/delete/${id}`)
+      fetchPlaces()
+      setShowActionModal(false)
+    } catch (error) {
+      console.error("Error deleting place:", error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const resetForm = () => {
     setRating(0)
     setBannerFiles([])
     setMenuFile(null)
-    setMenuPreviewUrl("")
-    menuPreviewUrl
     setIsEditMode(false)
     setFormData(null)
+    setSelectedLocation(null)
+    setBannerPreviews([])
+    setErrors([])
   }
 
   const handleMenuUpload = (file: File) => {
     setMenuFile(file)
-    const url = URL.createObjectURL(file)
-    setMenuPreviewUrl(url)
   }
 
   const handleLocationSelect = (location: SelectedLocation) => {
@@ -147,9 +211,22 @@ export default function Places() {
     setShowLocationModal(false)
   }
 
+  const handleBannerUpload = (file: File, index: number) => {
+    const newFiles = [...bannerFiles]
+    newFiles[index] = file
+    setBannerFiles(newFiles)
+
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const newPreviews = [...bannerPreviews]
+      newPreviews[index] = reader.result as string
+      setBannerPreviews(newPreviews)
+    }
+    reader.readAsDataURL(file)
+  }
+
   return (
     <div className="bg-white min-h-screen w-full">
-      {/* Add Place Button */}
       <button
         onClick={() => setShowAddModal(true)}
         className="mb-6 bg-[#5E17EB] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#4B11C2]"
@@ -158,25 +235,24 @@ export default function Places() {
         <span>+</span>
       </button>
 
-      {/* Places Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {dummyPlaces.map((place) => (
+        {places.map((place) => (
           <div key={place.id} className="bg-white rounded-lg overflow-hidden">
             <div className="flex h-32">
-              {/* Left: Banner Image */}
               <div className="w-1/2 rounded-lg overflow-hidden">
                 <img
-                  src={place.images[0] || "/placeholder.svg"}
+                  src={place.banner || "/placeholder.svg"}
                   alt={place.name}
                   className="w-full h-full object-cover rounded-lg"
                 />
               </div>
 
-              {/* Right: Place Details */}
               <div className="w-1/2 p-4 flex flex-col justify-between">
                 <div>
                   <h3 className="text-lg font-semibold mb-1 text-gray-900">{place.name}</h3>
-                  <p className="text-gray-700 text-sm">{place.location}</p>
+                  <p className="text-gray-700 text-sm">
+                    {place.location.city}, {place.location.state}
+                  </p>
                 </div>
                 <button onClick={() => openActionModal(place)} className="self-end p-2 hover:bg-gray-100 rounded-full">
                   <Trash2 className="h-5 w-5 text-gray-700" />
@@ -187,10 +263,9 @@ export default function Places() {
         ))}
       </div>
 
-      {/* Action Modal */}
-      {showActionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+      {showActionModal && selectedPlace && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Place Actions</h3>
               <button onClick={() => setShowActionModal(false)}>
@@ -201,6 +276,7 @@ export default function Places() {
               <button
                 onClick={() => {
                   setIsEditMode(true)
+                  setSelectedPlace(selectedPlace)
                   setShowAddModal(true)
                   setShowActionModal(false)
                 }}
@@ -208,16 +284,20 @@ export default function Places() {
               >
                 Edit
               </button>
-              <button className="w-full py-2 text-left text-red-600 hover:bg-gray-100 rounded px-2">Delete</button>
+              <button
+                onClick={() => handleDeletePlace(selectedPlace.id)}
+                className="w-full py-2 text-left text-red-600 hover:bg-gray-100 rounded px-2"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add/Edit Place Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900">{isEditMode ? "Edit Place" : "Add New Place"}</h3>
               <button onClick={() => setShowAddModal(false)}>
@@ -229,7 +309,7 @@ export default function Places() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                 <div className="relative">
                   <select
-                    name="category"
+                    name="category_id"
                     required
                     className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5E17EB] text-gray-800 appearance-none"
                     onChange={(e) => {
@@ -238,13 +318,14 @@ export default function Places() {
                         setShowCategoryModal({ show: true, parent: isEditMode ? "edit" : "add" })
                       }
                     }}
+                    defaultValue={selectedPlace?.category_id || ""}
                   >
                     <option value="" disabled>
                       Select category
                     </option>
-                    {dummyCategories.map((category) => (
-                      <option key={category} value={category}>
-                        {category}
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
                       </option>
                     ))}
                     <option value="new" className="text-[#5E17EB]">
@@ -260,6 +341,7 @@ export default function Places() {
                   type="text"
                   required
                   className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5E17EB] text-gray-800"
+                  defaultValue={selectedPlace?.name || ""}
                 />
               </div>
               <div>
@@ -273,7 +355,9 @@ export default function Places() {
                     value={
                       selectedLocation
                         ? `${selectedLocation.city}, ${selectedLocation.state}, ${selectedLocation.country}`
-                        : ""
+                        : selectedPlace
+                          ? `${selectedPlace.location.city}, ${selectedPlace.location.state}, ${selectedPlace.location.country}`
+                          : ""
                     }
                     readOnly
                     onClick={() => setShowLocationModal(true)}
@@ -284,10 +368,11 @@ export default function Places() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Place Description</label>
                 <textarea
-                  name="description"
+                  name="about"
                   required
                   className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5E17EB] text-gray-800"
                   rows={3}
+                  defaultValue={selectedPlace?.about || ""}
                 />
               </div>
               <div>
@@ -300,7 +385,7 @@ export default function Places() {
                       onClick={() => setRating(star)}
                       className="text-gray-400 hover:text-[#5E17EB]"
                     >
-                      {star <= rating ? (
+                      {star <= (rating || selectedPlace?.rating || 0) ? (
                         <Star className="h-6 w-6 fill-[#5E17EB] text-[#5E17EB]" />
                       ) : (
                         <Star className="h-6 w-6" />
@@ -317,19 +402,17 @@ export default function Places() {
         </div>
       )}
 
-      {/* Details Modal (Merged Banner Upload, Hours, and Menu) */}
       {showDetailsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <button onClick={() => setShowDetailsModal(false)}>
                 <X className="h-5 w-5 text-gray-700" />
               </button>
             </div>
             <form onSubmit={handleDetailsSubmit} className="space-y-6">
-              {/* Main Banner Upload */}
               <div
-                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer mb-4"
+                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer mb-4 relative"
                 onClick={() => document.getElementById("main-banner-upload")?.click()}
               >
                 <input
@@ -339,23 +422,28 @@ export default function Places() {
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
-                    if (file) {
-                      const newFiles = [...bannerFiles]
-                      newFiles[0] = file
-                      setBannerFiles(newFiles)
-                    }
+                    if (file) handleBannerUpload(file, 0)
                   }}
                 />
-                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-2" />
-                <p className="text-sm text-gray-400">Click to upload</p>
+                {bannerPreviews[0] ? (
+                  <img
+                    src={bannerPreviews[0] || "/placeholder.svg"}
+                    alt="Main banner preview"
+                    className="w-full h-32 object-cover rounded-lg"
+                  />
+                ) : (
+                  <>
+                    <Upload className="mx-auto h-12 w-12 text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-400">Click to upload main banner</p>
+                  </>
+                )}
               </div>
 
-              {/* Additional Banner Uploads */}
               <div className="grid grid-cols-3 gap-2 mb-6">
                 {[1, 2].map((index) => (
                   <div
                     key={index}
-                    className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer aspect-square flex items-center justify-center"
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer aspect-square flex items-center justify-center relative"
                     onClick={() => document.getElementById(`banner-upload-${index}`)?.click()}
                   >
                     <input
@@ -365,14 +453,18 @@ export default function Places() {
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
-                        if (file) {
-                          const newFiles = [...bannerFiles]
-                          newFiles[index] = file
-                          setBannerFiles(newFiles)
-                        }
+                        if (file) handleBannerUpload(file, index)
                       }}
                     />
-                    <Upload className="h-6 w-6 text-gray-400" />
+                    {bannerPreviews[index] ? (
+                      <img
+                        src={bannerPreviews[index] || "/placeholder.svg"}
+                        alt={`Banner ${index} preview`}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    ) : (
+                      <Upload className="h-6 w-6 text-gray-400" />
+                    )}
                   </div>
                 ))}
                 <button
@@ -387,26 +479,30 @@ export default function Places() {
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0]
-                      if (file) {
-                        const newFiles = [...bannerFiles]
-                        newFiles[2] = file
-                        setBannerFiles(newFiles)
-                      }
+                      if (file) handleBannerUpload(file, 2)
                     }}
                   />
-                  <Plus className="h-6 w-6 text-gray-400" />
+                  {bannerPreviews[2] ? (
+                    <img
+                      src={bannerPreviews[2] || "/placeholder.svg"}
+                      alt="Banner 3 preview"
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  ) : (
+                    <Plus className="h-6 w-6 text-gray-400" />
+                  )}
                 </button>
               </div>
 
-              {/* Opening Hours */}
               <div className="space-y-3">
                 <div className="relative">
                   <input
-                    name="weekdayHours"
+                    name="opening_hour"
                     type="text"
                     required
                     placeholder="Opening hours"
                     className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5E17EB] text-gray-800"
+                    defaultValue={selectedPlace?.opening_hour || ""}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-[#5E17EB]/10">
                     <span className="text-xs font-medium text-[#5E17EB]">Week days</span>
@@ -414,54 +510,100 @@ export default function Places() {
                 </div>
                 <div className="relative">
                   <input
-                    name="weekendHours"
+                    name="closing_hour"
                     type="text"
                     required
-                    placeholder="Opening hours"
+                    placeholder="Closing hours"
                     className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5E17EB] text-gray-800"
+                    defaultValue={selectedPlace?.closing_hour || ""}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-[#5E17EB]/10">
+                    <span className="text-xs font-medium text-[#5E17EB]">Week days</span>
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    name="weekend_opening_hour"
+                    type="text"
+                    required
+                    placeholder="Weekend opening hours"
+                    className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5E17EB] text-gray-800"
+                    defaultValue={selectedPlace?.weekend_opening_hour || ""}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-[#5E17EB]/10">
                     <span className="text-xs font-medium text-[#5E17EB]">Weekends</span>
                   </span>
                 </div>
+                <div className="relative">
+                  <input
+                    name="weekend_closing_hour"
+                    type="text"
+                    required
+                    placeholder="Weekend closing hours"
+                    className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5E17EB] text-gray-800"
+                    defaultValue={selectedPlace?.weekend_closing_hour || ""}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-[#5E17EB]/10">
+                    <span className="text-xs font-medium text-[#5E17EB]">Weekends</span>
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Menu PDF</label>
+                  <div
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-1 text-center cursor-pointer flex items-center justify-center h-20 relative overflow-hidden"
+                    onClick={() => document.getElementById("menu-upload")?.click()}
+                  >
+                    <input
+                      id="menu-upload"
+                      type="file"
+                      accept="application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) handleMenuUpload(file)
+                      }}
+                    />
+                    {menuFile ? (
+                      <div className="absolute inset-0 bg-red-600 flex items-center justify-center">
+                        <p className="text-white font-bold text-sm">PDF</p>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <Upload className="mx-auto h-3 w-3 text-gray-400" />
+                        <p className="mt-1 text-xs text-gray-500">Upload menu PDF</p>
+                      </div>
+                    )}
+                  </div>
+                  {menuFile && <p className="text-xs text-gray-500 truncate">{menuFile.name}</p>}
+                </div>
               </div>
 
-              {/* Menu Upload */}
-              <div
-                className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer flex items-center gap-3"
-                onClick={() => document.getElementById("menu-upload")?.click()}
-              >
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <Upload className="h-6 w-6 text-gray-400" />
+              {errors.length > 0 && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                  <strong className="font-bold">Error:</strong>
+                  <ul className="mt-2 list-disc list-inside">
+                    {errors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
                 </div>
-                <input
-                  id="menu-upload"
-                  type="file"
-                  accept="application/pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleMenuUpload(file)
-                  }}
-                />
-                <span className="text-sm text-gray-600">Upload menu PDF</span>
-              </div>
+              )}
 
               <button type="submit" className="w-full bg-[#5E17EB] text-white py-3 rounded-lg hover:bg-[#4B11C2]">
-                save
+                {isEditMode ? "Update" : "Save"}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Create Category Modal */}
       {showCategoryModal.show && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 overflow-y-auto"
           style={{ zIndex: 60 }}
         >
-          <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Create Category</h3>
               <button onClick={() => setShowCategoryModal({ show: false, parent: null })}>
@@ -485,12 +627,12 @@ export default function Places() {
           </div>
         </div>
       )}
-      {/* Location Selection Modal */}
       <LocationSelectionModal
         isVisible={showLocationModal}
         onClose={() => setShowLocationModal(false)}
         onSelectLocation={handleLocationSelect}
       />
+      {isLoading && <LoadingModal />}
     </div>
   )
 }

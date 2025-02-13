@@ -1,5 +1,3 @@
-"use client"
-
 import { useState } from "react"
 import Events from "../Events/Events"
 import Places1 from "./Places1"
